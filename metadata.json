@@ -1,0 +1,6 @@
+{
+  "name": "NEXORA — Infrastructure Memory & Intelligence Platform",
+  "description": "AI-powered infrastructure memory and intelligence platform converting scattered maintenance records into connected, searchable, evidence-backed knowledge.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

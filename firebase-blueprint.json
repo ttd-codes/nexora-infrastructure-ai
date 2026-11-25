@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated platform user profile with role-based access.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["admin", "engineer", "technician", "viewer"] },
+        "organizationName": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Campus building or facility zone where infrastructure assets reside.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "buildingCode": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "facilityType": { "type": "string", "maxLength": 80 },
+        "zoneDescription": { "type": "string", "maxLength": 500 },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "buildingCode", "isDemoData", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "Registered physical infrastructure equipment or system.",
+      "type": "object",
+      "properties": {
+        "assetCode": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "category": { "type": "string", "enum": ["Mechanical", "Electrical", "Water Supply", "Cooling Systems", "Structural", "General Equipment"] },
+        "locationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "locationName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "installDate": { "type": "string", "maxLength": 32 },
+        "manufacturer": { "type": "string", "maxLength": 120 },
+        "modelNumber": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["Operational", "Attention Required", "Under Maintenance", "Offline"] },
+        "description": { "type": "string", "maxLength": 2000 },
+        "components": { "type": "array", "maxLength": 25 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["assetCode", "name", "category", "locationId", "locationName", "status", "components", "isDemoData", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "MaintenanceRecord": {
+      "title": "MaintenanceRecord",
+      "description": "Historical maintenance, inspection, incident, or repair log linked to an asset.",
+      "type": "object",
+      "properties": {
+        "recordCode": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "assetCode": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "assetName": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "locationName": { "type": "string", "maxLength": 120 },
+        "incidentDate": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "category": { "type": "string", "enum": ["Mechanical", "Electrical", "Water Supply", "Cooling Systems", "Structural", "General Equipment"] },
+        "recordType": { "type": "string", "enum": ["Incident", "Repair", "Inspection", "Preventive"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "symptoms": { "type": "array", "maxLength": 15 },
+        "repairAction": { "type": "string", "maxLength": 2000 },
+        "componentInvolved": { "type": "string", "maxLength": 120 },
+        "technicianName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Open", "In Progress", "Resolved", "Monitoring"] },
+        "inspectionStatus": { "type": "string", "enum": ["Pending", "Scheduled", "Completed"] },
+        "sourceDocumentId": { "type": "string", "maxLength": 128 },
+        "sourceDocumentName": { "type": "string", "maxLength": 200 },
+        "confidence": { "type": "number" },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recordCode", "assetId", "assetCode", "assetName", "incidentDate", "category", "recordType", "title", "description", "symptoms", "status", "inspectionStatus", "isDemoData", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "DocumentRecord": {
+      "title": "DocumentRecord",
+      "description": "Uploaded source maintenance artifact with AI extraction provenance.",
+      "type": "object",
+      "properties": {
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "fileType": { "type": "string", "enum": ["pdf", "image", "audio", "text", "manual"] },
+        "mimeType": { "type": "string", "maxLength": 120 },
+        "fileSize": { "type": "number" },
+        "assetId": { "type": "string", "maxLength": 128 },
+        "assetCode": { "type": "string", "maxLength": 40 },
+        "extractionStatus": { "type": "string", "enum": ["Processed", "Needs Review", "Confirmed", "Failed"] },
+        "extractedSummary": { "type": "string", "maxLength": 2000 },
+        "rawTextSnippet": { "type": "string", "maxLength": 4000 },
+        "previewUrl": { "type": "string", "maxLength": 500 },
+        "uncertainFields": { "type": "array", "maxLength": 15 },
+        "confirmedByUser": { "type": "boolean" },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fileName", "fileType", "extractionStatus", "uncertainFields", "confirmedByUser", "isDemoData", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "Recommendation": {
+      "title": "Recommendation",
+      "description": "Evidence-backed recurring pattern finding and inspection recommendation.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "assetCode": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "assetName": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "ruleTriggered": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "ruleDescription": { "type": "string", "maxLength": 500 },
+        "severity": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "observedFacts": { "type": "array", "maxLength": 20 },
+        "interpretation": { "type": "string", "maxLength": 2000 },
+        "missingInformation": { "type": "array", "maxLength": 15 },
+        "suggestedActions": { "type": "array", "maxLength": 15 },
+        "supportingRecordIds": { "type": "array", "maxLength": 25 },
+        "contradictoryRecordIds": { "type": "array", "maxLength": 15 },
+        "evidenceCompleteness": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Inspection Scheduled", "Reviewed", "Dismissed"] },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "assetId", "assetCode", "assetName", "ruleTriggered", "severity", "observedFacts", "interpretation", "missingInformation", "suggestedActions", "supportingRecordIds", "contradictoryRecordIds", "evidenceCompleteness", "status", "isDemoData", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System alert triggered by recurring pattern detection or intake validation.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "severity": { "type": "string", "enum": ["High", "Medium", "Info"] },
+        "assetId": { "type": "string", "maxLength": 128 },
+        "recommendationId": { "type": "string", "maxLength": 128 },
+        "read": { "type": "boolean" },
+        "isDemoData": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "severity", "read", "isDemoData", "ownerUid", "createdAt"]
+    },
+    "RuleConfig": {
+      "title": "RuleConfig",
+      "description": "Configurable threshold for the transparent recurrence detection engine.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 600 },
+        "thresholdCount": { "type": "number" },
+        "windowDays": { "type": "number" },
+        "enabled": { "type": "boolean" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "thresholdCount", "windowDays", "enabled", "ownerUid", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profiles isolated by userId."
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Campus facility locations owned by the workspace user."
+    },
+    "/assets/{assetId}": {
+      "schema": { "$ref": "#/entities/Asset" },
+      "description": "Infrastructure assets owned by the workspace user."
+    },
+    "/maintenanceRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/MaintenanceRecord" },
+      "description": "Maintenance incidents, repairs, and inspections."
+    },
+    "/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/DocumentRecord" },
+      "description": "Uploaded source maintenance artifacts and extraction metadata."
+    },
+    "/recommendations/{recommendationId}": {
+      "schema": { "$ref": "#/entities/Recommendation" },
+      "description": "Evidence-backed pattern findings and suggested inspections."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Recurrence alerts and system notifications."
+    },
+    "/ruleConfigs/{ruleId}": {
+      "schema": { "$ref": "#/entities/RuleConfig" },
+      "description": "User-configurable recurrence detection thresholds."
+    }
+  }
+}

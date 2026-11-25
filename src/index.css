@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #101418;
+    color: #F4F5F6;
+    font-family: var(--font-sans);
+    letter-spacing: 0.005em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom subtle dark industrial scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #101418;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2C353F;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3D4854;
+}
+
+/* React Flow Dark Industrial Theme Integration */
+.react-flow__node {
+  font-family: var(--font-sans);
+}
+
+.react-flow__controls {
+  background: #1B2229 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls-button {
+  background: #1B2229 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #9AA5B1 !important;
+  fill: #9AA5B1 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #242C34 !important;
+  color: #F4F5F6 !important;
+  fill: #F4F5F6 !important;
+}
+
+.react-flow__minimap {
+  background: #1B2229 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

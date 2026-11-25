@@ -1,0 +1,392 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'thiviyadarshan2007@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidListOfStrings(val, maxItems) {
+      return val is list && val.size() <= maxItems && (val.size() == 0 || (val[0] is string && val[0].size() <= 300));
+    }
+
+    // Bootstrapped connection check document
+    match /test/{docId} {
+      allow get: if isSignedIn() && docId == 'connection';
+    }
+
+    // Admin registry
+    match /admins/{adminId} {
+      allow get: if isVerified() && isValidId(adminId) && (isOwner(adminId) || isAdmin());
+    }
+
+    // 1. Users Collection (PII Isolation)
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'organizationName', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidString(data.email, 3, 254) &&
+        isValidString(data.displayName, 1, 120) &&
+        data.role in ['admin', 'engineer', 'technician', 'viewer'] &&
+        (!('organizationName' in data) || isValidString(data.organizationName, 0, 160)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isVerified() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isVerified() && (existing().uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUser(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role in ['engineer', 'technician', 'viewer'] || isAdmin());
+      allow update: if isVerified() &&
+        isValidId(userId) &&
+        isValidUser(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'organizationName', 'updatedAt'])) ||
+          isAdmin()
+        );
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // 2. Locations Collection
+    function isValidLocation(data) {
+      return data.keys().hasAll(['name', 'buildingCode', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['name', 'buildingCode', 'facilityType', 'zoneDescription', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidString(data.name, 1, 120) &&
+        isValidString(data.buildingCode, 1, 32) &&
+        (!('facilityType' in data) || isValidString(data.facilityType, 0, 80)) &&
+        (!('zoneDescription' in data) || isValidString(data.zoneDescription, 0, 500)) &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /locations/{locationId} {
+      allow get: if isVerified() && isValidId(locationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(locationId) &&
+        isValidLocation(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(locationId) &&
+        isValidLocation(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'buildingCode', 'facilityType', 'zoneDescription', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(locationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 3. Assets Collection
+    function isValidAsset(data) {
+      return data.keys().hasAll(['assetCode', 'name', 'category', 'locationId', 'locationName', 'status', 'components', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['assetCode', 'name', 'category', 'locationId', 'locationName', 'installDate', 'manufacturer', 'modelNumber', 'status', 'description', 'components', 'imageUrl', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidString(data.assetCode, 1, 40) &&
+        isValidString(data.name, 1, 140) &&
+        data.category in ['Mechanical', 'Electrical', 'Water Supply', 'Cooling Systems', 'Structural', 'General Equipment'] &&
+        isValidId(data.locationId) &&
+        isValidString(data.locationName, 1, 120) &&
+        (!('installDate' in data) || isValidString(data.installDate, 0, 32)) &&
+        (!('manufacturer' in data) || isValidString(data.manufacturer, 0, 120)) &&
+        (!('modelNumber' in data) || isValidString(data.modelNumber, 0, 100)) &&
+        data.status in ['Operational', 'Attention Required', 'Under Maintenance', 'Offline'] &&
+        (!('description' in data) || isValidString(data.description, 0, 2000)) &&
+        isValidListOfStrings(data.components, 25) &&
+        (!('imageUrl' in data) || isValidString(data.imageUrl, 0, 500)) &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /assets/{assetId} {
+      allow get: if isVerified() && isValidId(assetId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(assetId) &&
+        isValidAsset(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/locations/$(incoming().locationId)) &&
+        get(/databases/$(database)/documents/locations/$(incoming().locationId)).data.ownerUid == request.auth.uid;
+      allow update: if isVerified() &&
+        isValidId(assetId) &&
+        isValidAsset(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['assetCode', 'name', 'category', 'locationId', 'locationName', 'installDate', 'manufacturer', 'modelNumber', 'status', 'description', 'components', 'imageUrl', 'updatedAt']) ||
+          isAdmin()
+        );
+      allow delete: if isVerified() && isValidId(assetId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 4. Maintenance Records Collection
+    function isValidMaintenanceRecord(data) {
+      return data.keys().hasAll(['recordCode', 'assetId', 'assetCode', 'assetName', 'incidentDate', 'category', 'recordType', 'title', 'description', 'symptoms', 'status', 'inspectionStatus', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['recordCode', 'assetId', 'assetCode', 'assetName', 'locationName', 'incidentDate', 'category', 'recordType', 'title', 'description', 'symptoms', 'repairAction', 'componentInvolved', 'technicianName', 'status', 'inspectionStatus', 'sourceDocumentId', 'sourceDocumentName', 'confidence', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidString(data.recordCode, 1, 40) &&
+        isValidId(data.assetId) &&
+        isValidString(data.assetCode, 1, 40) &&
+        isValidString(data.assetName, 1, 140) &&
+        (!('locationName' in data) || isValidString(data.locationName, 0, 120)) &&
+        isValidString(data.incidentDate, 4, 32) &&
+        data.category in ['Mechanical', 'Electrical', 'Water Supply', 'Cooling Systems', 'Structural', 'General Equipment'] &&
+        data.recordType in ['Incident', 'Repair', 'Inspection', 'Preventive'] &&
+        isValidString(data.title, 1, 200) &&
+        isValidString(data.description, 1, 3000) &&
+        isValidListOfStrings(data.symptoms, 15) &&
+        (!('repairAction' in data) || isValidString(data.repairAction, 0, 2000)) &&
+        (!('componentInvolved' in data) || isValidString(data.componentInvolved, 0, 120)) &&
+        (!('technicianName' in data) || isValidString(data.technicianName, 0, 120)) &&
+        data.status in ['Open', 'In Progress', 'Resolved', 'Monitoring'] &&
+        data.inspectionStatus in ['Pending', 'Scheduled', 'Completed'] &&
+        (!('sourceDocumentId' in data) || isValidString(data.sourceDocumentId, 0, 128)) &&
+        (!('sourceDocumentName' in data) || isValidString(data.sourceDocumentName, 0, 200)) &&
+        (!('confidence' in data) || (data.confidence is number && data.confidence >= 0 && data.confidence <= 1)) &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /maintenanceRecords/{recordId} {
+      allow get: if isVerified() && isValidId(recordId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(recordId) &&
+        isValidMaintenanceRecord(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/assets/$(incoming().assetId)) &&
+        get(/databases/$(database)/documents/assets/$(incoming().assetId)).data.ownerUid == request.auth.uid;
+      allow update: if isVerified() &&
+        isValidId(recordId) &&
+        isValidMaintenanceRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['assetId', 'assetCode', 'assetName', 'locationName', 'incidentDate', 'category', 'recordType', 'title', 'description', 'symptoms', 'repairAction', 'componentInvolved', 'technicianName', 'status', 'inspectionStatus', 'sourceDocumentId', 'sourceDocumentName', 'confidence', 'updatedAt']) ||
+          isAdmin()
+        );
+      allow delete: if isVerified() && isValidId(recordId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 5. Documents Collection
+    function isValidDocument(data) {
+      return data.keys().hasAll(['fileName', 'fileType', 'extractionStatus', 'uncertainFields', 'confirmedByUser', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['fileName', 'fileType', 'mimeType', 'fileSize', 'assetId', 'assetCode', 'extractionStatus', 'extractedSummary', 'rawTextSnippet', 'previewUrl', 'uncertainFields', 'confirmedByUser', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidString(data.fileName, 1, 200) &&
+        data.fileType in ['pdf', 'image', 'audio', 'text', 'manual'] &&
+        (!('mimeType' in data) || isValidString(data.mimeType, 0, 120)) &&
+        (!('fileSize' in data) || (data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 52428800)) &&
+        (!('assetId' in data) || isValidString(data.assetId, 0, 128)) &&
+        (!('assetCode' in data) || isValidString(data.assetCode, 0, 40)) &&
+        data.extractionStatus in ['Processed', 'Needs Review', 'Confirmed', 'Failed'] &&
+        (!('extractedSummary' in data) || isValidString(data.extractedSummary, 0, 2000)) &&
+        (!('rawTextSnippet' in data) || isValidString(data.rawTextSnippet, 0, 4000)) &&
+        (!('previewUrl' in data) || isValidString(data.previewUrl, 0, 500)) &&
+        isValidListOfStrings(data.uncertainFields, 15) &&
+        data.confirmedByUser is bool &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /documents/{documentId} {
+      allow get: if isVerified() && isValidId(documentId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(documentId) &&
+        isValidDocument(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(documentId) &&
+        isValidDocument(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['assetId', 'assetCode', 'extractionStatus', 'extractedSummary', 'confirmedByUser', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(documentId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 6. Recommendations Collection
+    function isValidRecommendation(data) {
+      return data.keys().hasAll(['title', 'assetId', 'assetCode', 'assetName', 'ruleTriggered', 'severity', 'observedFacts', 'interpretation', 'missingInformation', 'suggestedActions', 'supportingRecordIds', 'contradictoryRecordIds', 'evidenceCompleteness', 'status', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['title', 'assetId', 'assetCode', 'assetName', 'ruleTriggered', 'ruleDescription', 'severity', 'observedFacts', 'interpretation', 'missingInformation', 'suggestedActions', 'supportingRecordIds', 'contradictoryRecordIds', 'evidenceCompleteness', 'status', 'isDemoData', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidString(data.title, 1, 240) &&
+        isValidId(data.assetId) &&
+        isValidString(data.assetCode, 1, 40) &&
+        isValidString(data.assetName, 1, 140) &&
+        isValidString(data.ruleTriggered, 1, 120) &&
+        (!('ruleDescription' in data) || isValidString(data.ruleDescription, 0, 500)) &&
+        data.severity in ['High', 'Medium', 'Low'] &&
+        isValidListOfStrings(data.observedFacts, 20) &&
+        isValidString(data.interpretation, 1, 2000) &&
+        isValidListOfStrings(data.missingInformation, 15) &&
+        isValidListOfStrings(data.suggestedActions, 15) &&
+        isValidListOfStrings(data.supportingRecordIds, 25) &&
+        isValidListOfStrings(data.contradictoryRecordIds, 15) &&
+        data.evidenceCompleteness is number && data.evidenceCompleteness >= 0 && data.evidenceCompleteness <= 100 &&
+        data.status in ['Active', 'Inspection Scheduled', 'Reviewed', 'Dismissed'] &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /recommendations/{recommendationId} {
+      allow get: if isVerified() && isValidId(recommendationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(recommendationId) &&
+        isValidRecommendation(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/assets/$(incoming().assetId)) &&
+        get(/databases/$(database)/documents/assets/$(incoming().assetId)).data.ownerUid == request.auth.uid;
+      allow update: if isVerified() &&
+        isValidId(recommendationId) &&
+        isValidRecommendation(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        (
+          (existing().status != 'Dismissed' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          isAdmin()
+        );
+      allow delete: if isVerified() && isValidId(recommendationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 7. Notifications Collection
+    function isValidNotification(data) {
+      return data.keys().hasAll(['title', 'message', 'severity', 'read', 'isDemoData', 'ownerUid', 'createdAt']) &&
+        data.keys().hasOnly(['title', 'message', 'severity', 'assetId', 'recommendationId', 'read', 'isDemoData', 'ownerUid', 'createdAt']) &&
+        isValidString(data.title, 1, 180) &&
+        isValidString(data.message, 1, 600) &&
+        data.severity in ['High', 'Medium', 'Info'] &&
+        (!('assetId' in data) || isValidString(data.assetId, 0, 128)) &&
+        (!('recommendationId' in data) || isValidString(data.recommendationId, 0, 128)) &&
+        data.read is bool &&
+        data.isDemoData is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isVerified() && isValidId(notificationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isVerified() && isValidId(notificationId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // 8. Rule Configs Collection
+    function isValidRuleConfig(data) {
+      return data.keys().hasAll(['code', 'name', 'thresholdCount', 'windowDays', 'enabled', 'ownerUid', 'updatedAt']) &&
+        data.keys().hasOnly(['code', 'name', 'description', 'thresholdCount', 'windowDays', 'enabled', 'ownerUid', 'updatedAt']) &&
+        isValidString(data.code, 1, 32) &&
+        isValidString(data.name, 1, 160) &&
+        (!('description' in data) || isValidString(data.description, 0, 600)) &&
+        data.thresholdCount is number && data.thresholdCount >= 1 && data.thresholdCount <= 20 &&
+        data.windowDays is number && data.windowDays >= 7 && data.windowDays <= 730 &&
+        data.enabled is bool &&
+        isValidId(data.ownerUid) &&
+        data.updatedAt is timestamp;
+    }
+
+    match /ruleConfigs/{ruleId} {
+      allow get: if isVerified() && isValidId(ruleId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isVerified() &&
+        isValidId(ruleId) &&
+        isValidRuleConfig(incoming()) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(ruleId) &&
+        isValidRuleConfig(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['thresholdCount', 'windowDays', 'enabled', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(ruleId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+  }
+}
